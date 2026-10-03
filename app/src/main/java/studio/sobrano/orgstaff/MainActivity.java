@@ -173,7 +173,7 @@ public class MainActivity extends Activity {
         replace(scroll(body));
 
         worker.submit(() -> {
-            SearchResult result = OsintSearcher.search(inn, text -> runOnUiThread(() -> status.setText(text)));
+            SearchResult result = ServerApi.search(inn, text -> runOnUiThread(() -> status.setText(text)));
             saveHistory(result);
             runOnUiThread(() -> showResult(result));
         });
@@ -338,10 +338,10 @@ public class MainActivity extends Activity {
         body.addView(header("○", "OrgStaff Mobile", "Профиль приложения"));
         body.addView(space(20));
         LinearLayout c = card(Color.WHITE);
-        c.addView(tv("Версия", 13, MUTED, false)); c.addView(tv("1.0.0", 18, TEXT, true));
+        c.addView(tv("Версия", 13, MUTED, false)); c.addView(tv("1.1.0", 18, TEXT, true));
         c.addView(space(14)); c.addView(divider()); c.addView(space(14));
         c.addView(tv("Назначение", 13, MUTED, false));
-        c.addView(tv("Поиск текущего руководства организаций по ИНН в общедоступных веб-источниках.", 15, TEXT, false));
+        c.addView(tv("Поиск текущего руководства организаций по ИНН через серверный поисковый API и общедоступные веб-источники.", 15, TEXT, false));
         body.addView(c);
         body.addView(space(14));
         LinearLayout privacy = card(LIGHT_BLUE);
