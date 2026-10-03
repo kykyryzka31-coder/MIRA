@@ -1,0 +1,27 @@
+name: Package signed release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version without v prefix
+        required: true
+        default: '1.1.0'
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download signed APK from release
+        run: |
+          VERSION="${{ inputs.version }}"
+          FILE="OrgStaff-Mobile-v${VERSION}.apk"
+          URL="https://github.com/kykyryzka31-coder/MIRA/releases/download/v${VERSION}/${FILE}"
+          curl -fL --retry 3 "$URL" -o "$FILE"
+          test -s "$FILE"
+          sha256sum "$FILE"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OrgStaff-Mobile-v${{ inputs.version }}-signed
+          path: OrgStaff-Mobile-v${{ inputs.version }}.apk
+          retention-days: 30
