@@ -66,6 +66,7 @@ final class ServerApi {
             out.birthplace = p.optString("birthplace", "");
             out.workSince = p.optString("workSince", "");
             out.tenure = p.optString("tenure", "");
+            out.privacy = p.optString("privacy", "");
             addStrings(out.education, p.optJSONArray("education"));
             addStrings(out.career, p.optJSONArray("career"));
             addSources(out.sources, p.optJSONArray("sources"));
