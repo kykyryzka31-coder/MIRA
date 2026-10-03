@@ -32,6 +32,7 @@ public class MainActivity extends Activity {
     private ExecutorService worker = Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
     private String activeTab = "search";
+    private String activePersonRequest = "";
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
@@ -180,102 +181,370 @@ public class MainActivity extends Activity {
     }
 
     private void showResult(SearchResult r) {
+        activePersonRequest = "";
         setTab("search");
         LinearLayout body = page();
         body.addView(backHeader(r.orgName == null ? "Результат" : r.orgName, "ИНН " + r.inn, this::showSearch));
         body.addView(space(12));
+
         LinearLayout chips = new LinearLayout(this);
         chips.setOrientation(LinearLayout.HORIZONTAL);
-        chips.addView(chip("Открытые источники", LIGHT_GREEN, GREEN));
+        chips.addView(chip("Открытые данные", LIGHT_GREEN, GREEN));
         chips.addView(spaceH(8));
-        chips.addView(chip(r.sources.size() + " источн.", LIGHT_BLUE, BLUE));
+        chips.addView(chip(r.people.size() + " подтвержд.", LIGHT_BLUE, BLUE));
         body.addView(chips);
         body.addView(space(14));
 
-        LinearLayout info = card(Color.WHITE);
-        info.addView(infoRow("ИНН", r.inn));
-        info.addView(divider());
-        info.addView(infoRow("Дата проверки", new SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(new Date())));
-        info.addView(divider());
-        info.addView(infoRow("Найдено лиц", String.valueOf(r.people.size())));
-        body.addView(info);
-
-        body.addView(space(14));
         Button fav = secondaryButton(isFavorite(r.inn) ? "★  В избранном" : "☆  Добавить в избранное");
         fav.setOnClickListener(v -> { toggleFavorite(r.inn, r.orgName); showResult(r); });
         body.addView(fav, new LinearLayout.LayoutParams(-1, dp(50)));
 
         if (r.error != null) {
-            body.addView(space(14));
+            body.addView(space(12));
             LinearLayout warn = card(Color.rgb(255,248,232));
-            warn.addView(tv("Поиск выполнен не полностью", 16, Color.rgb(138,83,0), true));
+            warn.addView(tv("Данные получены не полностью", 16, Color.rgb(138,83,0), true));
             warn.addView(space(4));
             warn.addView(tv(r.error, 13, Color.rgb(138,83,0), false));
             body.addView(warn);
         }
 
-        body.addView(space(22));
-        body.addView(sectionTitle("Руководство", r.people.size() + " найдено", null));
-        if (r.people.isEmpty()) {
-            LinearLayout empty = card(Color.WHITE);
-            empty.addView(tv("Подтверждённых ФИО по автоматическому поиску не найдено.", 15, TEXT, true));
-            empty.addView(space(6));
-            empty.addView(tv("Ниже сохранены найденные источники. Это лучше, чем показывать непроверенное имя как факт.", 13, MUTED, false));
-            body.addView(empty);
-        } else {
-            for (PersonRecord p : r.people) body.addView(personRow(p, r));
-        }
+        body.addView(space(16));
 
-        body.addView(space(22));
-        body.addView(sectionTitle("Источники", String.valueOf(r.sources.size()), null));
-        int shown = 0;
-        for (SourceRef s : r.sources) {
-            body.addView(sourceRow(s));
-            if (++shown >= 12) break;
-        }
+        LinearLayout orgContent = new LinearLayout(this);
+        orgContent.setOrientation(LinearLayout.VERTICAL);
+        addOrganizationInfo(orgContent, r);
+        body.addView(expandableSection("Об организации", organizationSummary(r), true, orgContent));
+        body.addView(space(12));
+
+        LinearLayout leadershipContent = new LinearLayout(this);
+        leadershipContent.setOrientation(LinearLayout.VERTICAL);
+        renderPeople(leadershipContent, r.people, r, "Официально найденное руководство пока не определено.");
+        leadershipContent.addView(space(8));
+        Button moreLeadership = secondaryButton("Найти расширенное руководство");
+        leadershipContent.addView(moreLeadership, new LinearLayout.LayoutParams(-1, dp(48)));
+        moreLeadership.setOnClickListener(v -> {
+            moreLeadership.setEnabled(false);
+            moreLeadership.setText("Ищу руководство…");
+            worker.submit(() -> {
+                PeopleResult loaded = ServerApi.loadManagement(r.inn);
+                runOnUiThread(() -> {
+                    if (loaded.error != null) {
+                        moreLeadership.setEnabled(true);
+                        moreLeadership.setText("Повторить расширенный поиск");
+                        Toast.makeText(this, loaded.error, Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    mergeSourcesInto(r.sources, loaded.sources);
+                    List<PersonRecord> merged = mergePeople(r.people, loaded.people);
+                    r.people.clear();
+                    r.people.addAll(merged);
+                    leadershipContent.removeAllViews();
+                    renderPeople(leadershipContent, r.people, r, "Расширенное руководство не найдено.");
+                    TextView done = tv("✓ Расширенный поиск завершён", 12, GREEN, true);
+                    leadershipContent.addView(done);
+                });
+            });
+        });
+        body.addView(expandableSection("Руководство", r.people.size() + " найдено", true, leadershipContent));
+        body.addView(space(12));
+
+        LinearLayout employeesContent = new LinearLayout(this);
+        employeesContent.setOrientation(LinearLayout.VERTICAL);
+        employeesContent.addView(tv("Список загружается отдельно, чтобы основной поиск оставался быстрым. Здесь показываются только сотрудники, которых удалось публично связать именно с этим юрлицом.", 13, MUTED, false));
+        employeesContent.addView(space(10));
+        Button loadEmployees = secondaryButton("Загрузить публичных сотрудников");
+        employeesContent.addView(loadEmployees, new LinearLayout.LayoutParams(-1, dp(48)));
+        loadEmployees.setOnClickListener(v -> {
+            loadEmployees.setEnabled(false);
+            loadEmployees.setText("Ищу сотрудников…");
+            worker.submit(() -> {
+                PeopleResult loaded = ServerApi.loadEmployees(r.inn);
+                runOnUiThread(() -> {
+                    employeesContent.removeAllViews();
+                    if (loaded.error != null) {
+                        employeesContent.addView(emptyCard("Не удалось загрузить список", loaded.error));
+                        Button retry = secondaryButton("Повторить");
+                        retry.setOnClickListener(x -> showResult(r));
+                        employeesContent.addView(space(8));
+                        employeesContent.addView(retry, new LinearLayout.LayoutParams(-1, dp(46)));
+                        return;
+                    }
+                    mergeSourcesInto(r.sources, loaded.sources);
+                    List<PersonRecord> employees = new ArrayList<>();
+                    Set<String> leadershipNames = new HashSet<>();
+                    for (PersonRecord p : r.people) leadershipNames.add(p.name.toLowerCase(Locale.ROOT));
+                    for (PersonRecord p : loaded.people) {
+                        if (!leadershipNames.contains(p.name.toLowerCase(Locale.ROOT))) employees.add(p);
+                    }
+                    if (employees.isEmpty()) {
+                        employeesContent.addView(emptyCard(
+                                "Дополнительные сотрудники пока не найдены",
+                                "Это не означает, что других сотрудников нет — открытого полного штатного списка у организации может не быть."
+                        ));
+                    } else {
+                        employeesContent.addView(tv("Публично найдено: " + employees.size(), 14, MUTED, true));
+                        employeesContent.addView(space(8));
+                        renderPeople(employeesContent, employees, r, "");
+                    }
+                });
+            });
+        });
+        body.addView(expandableSection("Публично найденные сотрудники", "нажмите, чтобы открыть", false, employeesContent));
+        body.addView(space(12));
+
+        LinearLayout sourcesContent = new LinearLayout(this);
+        sourcesContent.setOrientation(LinearLayout.VERTICAL);
+        renderSources(sourcesContent, r.sources, 30);
+        body.addView(expandableSection("Источники", r.sources.size() + " доступно", false, sourcesContent));
+
+        body.addView(space(14));
+        LinearLayout note = card(LIGHT_BLUE);
+        note.addView(tv("Как читать результаты", 15, TEXT, true));
+        note.addView(space(5));
+        note.addView(tv("Приложение показывает только то, что удалось подтвердить в открытых источниках. Отсутствие человека в списке не означает, что он не работает в организации.", 12, MUTED, false));
+        body.addView(note);
         replace(scroll(body));
     }
 
+    private String organizationSummary(SearchResult r) {
+        ArrayList<String> parts = new ArrayList<>();
+        if (!r.organization.region.isBlank()) parts.add(r.organization.region);
+        if (!r.organization.age.isBlank()) parts.add(r.organization.age);
+        if (!r.organization.staffCount.isBlank()) parts.add("штат " + r.organization.staffCount);
+        return parts.isEmpty() ? "реквизиты и открытые сведения" : String.join(" • ", parts);
+    }
+
+    private void addOrganizationInfo(LinearLayout box, SearchResult r) {
+        OrganizationInfo o = r.organization;
+        if (!o.legalName.isBlank()) { box.addView(infoRow("Полное название", o.legalName)); box.addView(divider()); }
+        box.addView(infoRow("ИНН", r.inn));
+        if (!o.kpp.isBlank()) { box.addView(divider()); box.addView(infoRow("КПП", o.kpp)); }
+        if (!o.ogrn.isBlank()) { box.addView(divider()); box.addView(infoRow("ОГРН", o.ogrn)); }
+        if (!o.region.isBlank()) { box.addView(divider()); box.addView(infoRow("Регион", o.region)); }
+        if (!o.registrationDate.isBlank()) { box.addView(divider()); box.addView(infoRow("Регистрация", o.registrationDate)); }
+        if (!o.age.isBlank()) { box.addView(divider()); box.addView(infoRow("Возраст организации", o.age)); }
+        if (!o.staffCount.isBlank()) { box.addView(divider()); box.addView(infoRow("Численность", o.staffCount)); }
+        if (!o.capital.isBlank()) { box.addView(divider()); box.addView(infoRow("Уставной капитал", o.capital)); }
+        if (!o.okvedCode.isBlank() || !o.okvedText.isBlank()) {
+            box.addView(divider());
+            box.addView(infoRow("Основной ОКВЭД", (o.okvedCode + " " + o.okvedText).trim()));
+        }
+        if (!o.legalAddress.isBlank()) { box.addView(divider()); box.addView(infoRow("Юридический адрес", o.legalAddress)); }
+        if (!o.website.isBlank()) { box.addView(divider()); box.addView(infoRow("Сайт", o.website)); }
+    }
+
+    private View expandableSection(String title, String subtitle, boolean open, LinearLayout inner) {
+        LinearLayout outer = card(Color.WHITE);
+        outer.setPadding(dp(16), dp(12), dp(16), dp(14));
+
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout textBox = new LinearLayout(this);
+        textBox.setOrientation(LinearLayout.VERTICAL);
+        textBox.addView(tv(title, 20, TEXT, true));
+        if (subtitle != null && !subtitle.isBlank()) textBox.addView(tv(subtitle, 12, MUTED, false));
+        head.addView(textBox, new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView arrow = tv(open ? "▴" : "▾", 24, BLUE, true);
+        arrow.setGravity(Gravity.CENTER);
+        head.addView(arrow, new LinearLayout.LayoutParams(dp(42), dp(42)));
+
+        inner.setVisibility(open ? View.VISIBLE : View.GONE);
+        outer.addView(head);
+        outer.addView(inner);
+        head.setOnClickListener(v -> {
+            boolean show = inner.getVisibility() != View.VISIBLE;
+            inner.setVisibility(show ? View.VISIBLE : View.GONE);
+            arrow.setText(show ? "▴" : "▾");
+        });
+        return outer;
+    }
+
+    private void renderPeople(LinearLayout box, List<PersonRecord> people, SearchResult r, String emptyText) {
+        if (people.isEmpty()) {
+            if (emptyText != null && !emptyText.isBlank()) box.addView(emptyCard("Нет подтверждённых данных", emptyText));
+            return;
+        }
+        for (PersonRecord p : people) box.addView(personRow(p, r));
+    }
+
+    private List<PersonRecord> mergePeople(List<PersonRecord> first, List<PersonRecord> second) {
+        LinkedHashMap<String,PersonRecord> map = new LinkedHashMap<>();
+        for (PersonRecord p : first) map.put(p.name.toLowerCase(Locale.ROOT), p);
+        for (PersonRecord p : second) {
+            String key = p.name.toLowerCase(Locale.ROOT);
+            if (!map.containsKey(key)) {
+                map.put(key, p);
+            } else {
+                PersonRecord old = map.get(key);
+                for (SourceRef s : p.sources) {
+                    boolean exists = false;
+                    for (SourceRef x : old.sources) if (x.url.equals(s.url)) { exists = true; break; }
+                    if (!exists) old.sources.add(s);
+                }
+            }
+        }
+        return new ArrayList<>(map.values());
+    }
+
+    private void mergeSourcesInto(List<SourceRef> target, List<SourceRef> add) {
+        for (SourceRef s : add) {
+            boolean exists = false;
+            for (SourceRef x : target) if (x.url.equals(s.url)) { exists = true; break; }
+            if (!exists) target.add(s);
+        }
+    }
+
+    private void renderSources(LinearLayout box, List<SourceRef> sources, int max) {
+        if (sources.isEmpty()) {
+            box.addView(tv("Источники появятся после расширенного поиска.", 13, MUTED, false));
+            return;
+        }
+        int shown = 0;
+        for (SourceRef s : sources) {
+            box.addView(sourceRow(s));
+            if (++shown >= max) break;
+        }
+        if (sources.size() > shown) box.addView(tv("Ещё источников: " + (sources.size() - shown), 12, MUTED, false));
+    }
+
     private View personRow(PersonRecord p, SearchResult r) {
-        LinearLayout c = card(Color.WHITE);
-        c.setPadding(dp(16),dp(14),dp(16),dp(14));
+        LinearLayout c = card(Color.rgb(252,253,255));
+        c.setPadding(dp(14),dp(12),dp(14),dp(12));
         TextView role = tv(p.role, 13, MUTED, false);
         TextView name = tv(p.name, 17, TEXT, true);
-        String statusLabel = p.officialRegistry() ? "✓ ЕГРЮЛ ФНС" : (p.confirmed() ? "✓ Подтверждено" : "◷ Требует проверки");
+        String statusLabel = p.officialRegistry() ? "✓ ЕГРЮЛ ФНС" : (p.confirmed() ? "✓ Подтверждено" : "◷ Открытый источник");
         TextView st = tv(statusLabel + "  •  " + p.sources.size() + " ист.", 12, p.confirmed()?GREEN:BLUE, true);
         c.addView(role); c.addView(space(3)); c.addView(name); c.addView(space(5)); c.addView(st);
         c.setOnClickListener(v -> showPerson(p, r));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1,-2); lp.setMargins(0,0,0,dp(10)); c.setLayoutParams(lp);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1,-2);
+        lp.setMargins(0,0,0,dp(8)); c.setLayoutParams(lp);
         return c;
     }
 
     private void showPerson(PersonRecord p, SearchResult r) {
+        String requestKey = r.inn + "|" + p.name + "|" + p.role;
+        activePersonRequest = requestKey;
+        showPersonLoading(p, r);
+        worker.submit(() -> {
+            PersonProfile profile = ServerApi.loadPersonProfile(r.inn, p.name, p.role);
+            runOnUiThread(() -> {
+                if (requestKey.equals(activePersonRequest)) showPersonProfile(p, r, profile);
+            });
+        });
+    }
+
+    private void showPersonLoading(PersonRecord p, SearchResult r) {
         setTab("search");
         LinearLayout body = page();
-        body.addView(backHeader("Карточка лица", r.orgName, () -> showResult(r)));
+        body.addView(backHeader("Карточка сотрудника", r.orgName, () -> { activePersonRequest = ""; showResult(r); }));
         body.addView(space(12));
+        body.addView(personHero(p));
+        body.addView(space(12));
+        LinearLayout loading = card(Color.WHITE);
+        ProgressBar pb = new ProgressBar(this);
+        loading.addView(pb, new LinearLayout.LayoutParams(dp(44),dp(44)));
+        loading.addView(space(8));
+        loading.addView(tv("Собираю публичный профиль…", 16, TEXT, true));
+        loading.addView(tv("Биография, период работы, образование и профессиональные источники подгружаются отдельно.", 12, MUTED, false));
+        body.addView(loading);
+        replace(scroll(body));
+    }
+
+    private View personHero(PersonRecord p) {
         LinearLayout hero = card(Color.WHITE);
-        TextView avatar = tv("○", 46, BLUE, true); avatar.setGravity(Gravity.CENTER);
-        hero.addView(avatar, new LinearLayout.LayoutParams(-1, dp(62)));
-        TextView name = tv(p.name, 24, TEXT, true); name.setGravity(Gravity.CENTER); hero.addView(name);
-        TextView role = tv(p.role, 15, MUTED, false); role.setGravity(Gravity.CENTER); hero.addView(role);
-        body.addView(hero);
+        TextView avatar = tv("○", 46, BLUE, true);
+        avatar.setGravity(Gravity.CENTER);
+        hero.addView(avatar, new LinearLayout.LayoutParams(-1, dp(58)));
+        TextView name = tv(p.name, 23, TEXT, true);
+        name.setGravity(Gravity.CENTER);
+        hero.addView(name);
+        TextView role = tv(p.role, 14, MUTED, false);
+        role.setGravity(Gravity.CENTER);
+        hero.addView(role);
+        return hero;
+    }
+
+    private void showPersonProfile(PersonRecord p, SearchResult r, PersonProfile profile) {
+        setTab("search");
+        LinearLayout body = page();
+        body.addView(backHeader("Карточка сотрудника", r.orgName, () -> { activePersonRequest = ""; showResult(r); }));
         body.addView(space(12));
-        LinearLayout info = card(Color.WHITE);
-        info.addView(infoRow("Статус", p.officialRegistry() ? "Официальный ЕГРЮЛ ФНС" : (p.confirmed() ? "Подтверждено" : "Требует проверки"))); info.addView(divider());
-        info.addView(infoRow("Источников", String.valueOf(p.sources.size()))); info.addView(divider());
-        info.addView(infoRow("ИНН организации", r.inn));
-        body.addView(info);
-        body.addView(space(18));
-        body.addView(sectionTitle("Источники", String.valueOf(p.sources.size()), null));
-        for (SourceRef s : p.sources) body.addView(sourceRow(s));
+        body.addView(personHero(p));
+        body.addView(space(12));
+
+        LinearLayout basic = new LinearLayout(this);
+        basic.setOrientation(LinearLayout.VERTICAL);
+        basic.addView(infoRow("Организация", r.orgName));
+        basic.addView(divider());
+        basic.addView(infoRow("ИНН", r.inn));
+        basic.addView(divider());
+        basic.addView(infoRow("Статус", p.officialRegistry() ? "ЕГРЮЛ ФНС" : (p.confirmed() ? "Подтверждено" : "Открытый источник")));
+        if (!profile.birthDate.isBlank()) { basic.addView(divider()); basic.addView(infoRow("Дата/год рождения", profile.birthDate)); }
+        if (!profile.age.isBlank()) { basic.addView(divider()); basic.addView(infoRow("Возраст", profile.age + " лет")); }
+        if (!profile.birthplace.isBlank()) { basic.addView(divider()); basic.addView(infoRow("Место рождения", profile.birthplace)); }
+        body.addView(expandableSection("Основная информация", "публичные сведения", true, basic));
         body.addView(space(10));
+
+        LinearLayout work = new LinearLayout(this);
+        work.setOrientation(LinearLayout.VERTICAL);
+        work.addView(infoRow("Должность", p.role));
+        if (!profile.workSince.isBlank()) { work.addView(divider()); work.addView(infoRow("В должности с", profile.workSince)); }
+        if (!profile.tenure.isBlank()) { work.addView(divider()); work.addView(infoRow("Период", profile.tenure)); }
+        if (profile.workSince.isBlank()) {
+            work.addView(divider());
+            work.addView(tv("Точная дата начала работы в открытых источниках пока не подтверждена.", 12, MUTED, false));
+        }
+        body.addView(expandableSection("Работа в организации", profile.tenure.isBlank() ? "период уточняется" : profile.tenure, true, work));
+        body.addView(space(10));
+
+        LinearLayout education = new LinearLayout(this);
+        education.setOrientation(LinearLayout.VERTICAL);
+        addBulletTexts(education, profile.education, "Подтверждённых сведений об образовании пока не найдено.");
+        body.addView(expandableSection("Образование", profile.education.size() + " фактов", false, education));
+        body.addView(space(10));
+
+        LinearLayout career = new LinearLayout(this);
+        career.setOrientation(LinearLayout.VERTICAL);
+        addBulletTexts(career, profile.career, "Подтверждённая карьерная хронология пока не собрана.");
+        body.addView(expandableSection("Карьера", profile.career.size() + " фактов", false, career));
+        body.addView(space(10));
+
+        LinearLayout sources = new LinearLayout(this);
+        sources.setOrientation(LinearLayout.VERTICAL);
+        List<SourceRef> allSources = new ArrayList<>(p.sources);
+        mergeSourcesInto(allSources, profile.sources);
+        renderSources(sources, allSources, 30);
+        body.addView(expandableSection("Источники", allSources.size() + " доступно", false, sources));
+
+        body.addView(space(12));
+        if (profile.error != null) {
+            LinearLayout warn = card(Color.rgb(255,248,232));
+            warn.addView(tv("Часть профиля не загрузилась", 15, Color.rgb(138,83,0), true));
+            warn.addView(tv(profile.error, 12, Color.rgb(138,83,0), false));
+            body.addView(warn);
+            body.addView(space(10));
+        }
         LinearLayout note = card(LIGHT_BLUE);
-        note.addView(tv("Примечание", 16, TEXT, true));
+        note.addView(tv("Конфиденциальность", 15, TEXT, true));
         note.addView(space(5));
-        note.addView(tv("Карточка собрана из открытых источников. Официальный ЕГРЮЛ ФНС считается подтверждением; остальные должности подтверждаются несколькими независимыми источниками. Для юридически значимой проверки сверяйте первоисточник.", 13, MUTED, false));
+        note.addView(tv(profile.privacy.isBlank()
+                ? "Показываются только профессиональные и биографические сведения из открытых источников. Домашние адреса и личные контакты не собираются."
+                : profile.privacy, 12, MUTED, false));
         body.addView(note);
         replace(scroll(body));
+    }
+
+    private void addBulletTexts(LinearLayout box, List<String> items, String empty) {
+        if (items.isEmpty()) {
+            box.addView(tv(empty, 13, MUTED, false));
+            return;
+        }
+        for (String item : items) {
+            TextView t = tv("• " + item, 13, TEXT, false);
+            t.setPadding(0, dp(5), 0, dp(5));
+            box.addView(t);
+        }
     }
 
     private View sourceRow(SourceRef s) {
@@ -339,10 +608,10 @@ public class MainActivity extends Activity {
         body.addView(header("○", "OrgStaff Mobile", "Профиль приложения"));
         body.addView(space(20));
         LinearLayout c = card(Color.WHITE);
-        c.addView(tv("Версия", 13, MUTED, false)); c.addView(tv("1.1.0", 18, TEXT, true));
+        c.addView(tv("Версия", 13, MUTED, false)); c.addView(tv("1.2.0", 18, TEXT, true));
         c.addView(space(14)); c.addView(divider()); c.addView(space(14));
         c.addView(tv("Назначение", 13, MUTED, false));
-        c.addView(tv("Поиск текущего руководства организаций по ИНН через серверный поисковый API и общедоступные веб-источники.", 15, TEXT, false));
+        c.addView(tv("Структурированный поиск организации, руководства и публично найденных сотрудников по ИНН через серверный API и открытые источники.", 15, TEXT, false));
         body.addView(c);
         body.addView(space(14));
         LinearLayout privacy = card(LIGHT_BLUE);
@@ -380,7 +649,7 @@ public class MainActivity extends Activity {
     private View infoRow(String k, String v) {
         LinearLayout r = new LinearLayout(this); r.setOrientation(LinearLayout.HORIZONTAL); r.setGravity(Gravity.CENTER_VERTICAL); r.setPadding(0,dp(7),0,dp(7));
         r.addView(tv(k, 13, MUTED, false), new LinearLayout.LayoutParams(0,-2,1f));
-        TextView val = tv(v, 14, TEXT, true); val.setGravity(Gravity.END); val.setMaxLines(2); r.addView(val,new LinearLayout.LayoutParams(0,-2,1.35f)); return r;
+        TextView val = tv(v, 14, TEXT, true); val.setGravity(Gravity.END); val.setMaxLines(7); r.addView(val,new LinearLayout.LayoutParams(0,-2,1.35f)); return r;
     }
 
     private TextView chip(String s, int bg, int fg) {
