@@ -57,7 +57,9 @@ public class MainActivity extends Activity {
         root.addView(content, new LinearLayout.LayoutParams(-1, 0, 1f));
         nav = new LinearLayout(this);
         nav.setOrientation(LinearLayout.HORIZONTAL);
-        nav.setPadding(dp(8), dp(6), dp(8), dp(8));
+        nav.setWeightSum(4f);
+        nav.setGravity(Gravity.CENTER);
+        nav.setPadding(0, dp(4), 0, dp(6));
         nav.setBackgroundColor(Color.WHITE);
         root.addView(nav, new LinearLayout.LayoutParams(-1, dp(64)));
         setContentView(root);
@@ -78,11 +80,14 @@ public class MainActivity extends Activity {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setGravity(Gravity.CENTER);
+        box.setPadding(0, 0, 0, 0);
         boolean active = tab.equals(activeTab);
         TextView i = tv(icon, 20, active ? BLUE : MUTED, true);
+        i.setGravity(Gravity.CENTER);
         TextView t = tv(label, 11, active ? BLUE : MUTED, active);
-        box.addView(i);
-        box.addView(t);
+        t.setGravity(Gravity.CENTER);
+        box.addView(i, new LinearLayout.LayoutParams(-1, 0, 1f));
+        box.addView(t, new LinearLayout.LayoutParams(-1, -2));
         box.setOnClickListener(v -> {
             if (tab.equals("search")) showSearch();
             else if (tab.equals("history")) showHistory();
@@ -682,8 +687,8 @@ public class MainActivity extends Activity {
     private View header(String icon, String title, String sub) {
         LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL);
         TextView logo = tv(icon, 25, BLUE, true); logo.setGravity(Gravity.CENTER); logo.setBackground(rounded(LIGHT_BLUE, Color.TRANSPARENT, 14,0));
-        row.addView(logo, new LinearLayout.LayoutParams(dp(52),dp(52)));
-        LinearLayout tx = new LinearLayout(this); tx.setOrientation(LinearLayout.VERTICAL); tx.setPadding(dp(10),0,0,0);
+        row.addView(logo, new LinearLayout.LayoutParams(dp(50),dp(50)));
+        LinearLayout tx = new LinearLayout(this); tx.setOrientation(LinearLayout.VERTICAL); tx.setPadding(dp(18),dp(5),0,0);
         tx.addView(tv(title, 22, TEXT, true)); tx.addView(tv(sub, 13, MUTED, false));
         row.addView(tx, new LinearLayout.LayoutParams(0,-2,1f)); return row;
     }
