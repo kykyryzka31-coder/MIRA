@@ -14,8 +14,8 @@ final class OsintSearcher {
     interface Progress { void onProgress(String text); }
 
     private static final String USER_AGENT = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/128 Mobile Safari/537.36";
-    private static final Pattern FULL_FIO = Pattern.compile("\\b([А-ЯЁ][а-яё-]{1,35}\\s+[А-ЯЁ][а-яё-]{1,35}\\s+[А-ЯЁ][а-яё-]{1,35})\\b");
-    private static final Pattern INITIAL_FIO = Pattern.compile("\\b([А-ЯЁ][а-яё-]{1,35}\\s+[А-ЯЁ]\\.\\s?[А-ЯЁ]\\.)\\b");
+    private static final Pattern FULL_FIO = Pattern.compile("([А-ЯЁ][а-яё-]{1,35}\\s+[А-ЯЁ][а-яё-]{1,35}\\s+[А-ЯЁ][а-яё-]{1,35})");
+    private static final Pattern INITIAL_FIO = Pattern.compile("([А-ЯЁ][а-яё-]{1,35}\\s+[А-ЯЁ]\\.\\s?[А-ЯЁ]\\.)");
 
     private static final LinkedHashMap<String,String[]> ROLES = new LinkedHashMap<>();
     static {
