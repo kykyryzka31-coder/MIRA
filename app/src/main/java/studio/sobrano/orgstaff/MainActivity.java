@@ -213,7 +213,7 @@ public class MainActivity extends Activity {
         LinearLayout orgContent = new LinearLayout(this);
         orgContent.setOrientation(LinearLayout.VERTICAL);
         addOrganizationInfo(orgContent, r);
-        body.addView(expandableSection("Об организации", organizationSummary(r), true, orgContent));
+        body.addView(expandableSection("Об организации", organizationSummary(r), false, orgContent));
         body.addView(space(12));
 
         LinearLayout leadershipContent = new LinearLayout(this);
@@ -226,7 +226,7 @@ public class MainActivity extends Activity {
             moreLeadership.setEnabled(false);
             moreLeadership.setText("Ищу руководство…");
             worker.submit(() -> {
-                PeopleResult loaded = ServerApi.loadManagement(r.inn);
+                SearchResult loaded = ServerApi.loadManagement(r.inn);
                 runOnUiThread(() -> {
                     if (loaded.error != null) {
                         moreLeadership.setEnabled(true);
@@ -245,7 +245,7 @@ public class MainActivity extends Activity {
                 });
             });
         });
-        body.addView(expandableSection("Руководство", r.people.size() + " найдено", true, leadershipContent));
+        body.addView(expandableSection("Руководство", r.people.size() + " найдено", false, leadershipContent));
         body.addView(space(12));
 
         LinearLayout employeesContent = new LinearLayout(this);
@@ -258,7 +258,7 @@ public class MainActivity extends Activity {
             loadEmployees.setEnabled(false);
             loadEmployees.setText("Ищу сотрудников…");
             worker.submit(() -> {
-                PeopleResult loaded = ServerApi.loadEmployees(r.inn);
+                SearchResult loaded = ServerApi.loadEmployees(r.inn);
                 runOnUiThread(() -> {
                     employeesContent.removeAllViews();
                     if (loaded.error != null) {
@@ -331,6 +331,36 @@ public class MainActivity extends Activity {
         }
         if (!o.legalAddress.isBlank()) { box.addView(divider()); box.addView(infoRow("Юридический адрес", o.legalAddress)); }
         if (!o.website.isBlank()) { box.addView(divider()); box.addView(infoRow("Сайт", o.website)); }
+
+        boolean needsMore = o.legalAddress.isBlank() && o.website.isBlank() &&
+                o.staffCount.isBlank() && o.capital.isBlank() && o.okvedCode.isBlank();
+        if (needsMore) {
+            box.addView(space(10));
+            TextView hint = tv("Расширенные реквизиты загружаются только по запросу.", 12, MUTED, false);
+            box.addView(hint);
+            box.addView(space(8));
+            Button details = secondaryButton("Загрузить подробности");
+            box.addView(details, new LinearLayout.LayoutParams(-1, dp(46)));
+            details.setOnClickListener(v -> {
+                details.setEnabled(false);
+                details.setText("Загружаю…");
+                worker.submit(() -> {
+                    SearchResult loaded = ServerApi.loadDetails(r.inn);
+                    runOnUiThread(() -> {
+                        if (loaded.error != null) {
+                            details.setEnabled(true);
+                            details.setText("Повторить загрузку");
+                            Toast.makeText(this, loaded.error, Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        r.organization.mergeFrom(loaded.organization);
+                        mergeSourcesInto(r.sources, loaded.sources);
+                        box.removeAllViews();
+                        addOrganizationInfo(box, r);
+                    });
+                });
+            });
+        }
     }
 
     private View expandableSection(String title, String subtitle, boolean open, LinearLayout inner) {
@@ -413,7 +443,7 @@ public class MainActivity extends Activity {
         c.setPadding(dp(14),dp(12),dp(14),dp(12));
         TextView role = tv(p.role, 13, MUTED, false);
         TextView name = tv(p.name, 17, TEXT, true);
-        String statusLabel = p.officialRegistry() ? "✓ ЕГРЮЛ ФНС" : (p.confirmed() ? "✓ Подтверждено" : "◷ Открытый источник");
+        String statusLabel = p.officialRegistry() ? "✓ ЕГРЮЛ ФНС" : (p.officialSite() ? "✓ Официальный сайт" : (p.confirmed() ? "✓ Подтверждено" : "◷ Открытый источник"));
         TextView st = tv(statusLabel + "  •  " + p.sources.size() + " ист.", 12, p.confirmed()?GREEN:BLUE, true);
         c.addView(role); c.addView(space(3)); c.addView(name); c.addView(space(5)); c.addView(st);
         c.setOnClickListener(v -> showPerson(p, r));
