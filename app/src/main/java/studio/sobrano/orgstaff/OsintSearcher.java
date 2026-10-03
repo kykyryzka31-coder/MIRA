@@ -4,6 +4,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.jsoup.parser.Parser;
 
 import java.net.*;
 import java.util.*;
@@ -35,7 +36,7 @@ final class OsintSearcher {
         out.inn = inn;
         try {
             if (progress != null) progress.onProgress("Определяю организацию…");
-            List<SourceRef> general = ddg(inn + " ИНН организация руководство", 8);
+            List<SourceRef> general = webSearch(inn + " ИНН организация руководство", 10);
             out.sources.addAll(general);
             out.orgName = inferOrgName(general, inn);
 
@@ -44,7 +45,7 @@ final class OsintSearcher {
             for (Map.Entry<String,String[]> e : ROLES.entrySet()) {
                 final String role = e.getKey();
                 final String phrase = e.getValue()[0];
-                futures.add(pool.submit(() -> new RoleResults(role, ddg(inn + " \"" + phrase + "\"", 7))));
+                futures.add(pool.submit(() -> new RoleResults(role, webSearch(inn + " \"" + phrase + "\"", 8))));
             }
             pool.shutdown();
 
@@ -85,7 +86,92 @@ final class OsintSearcher {
         RoleResults(String role, List<SourceRef> sources) { this.role = role; this.sources = sources; }
     }
 
-    private static List<SourceRef> ddg(String query, int limit) {
+    static List<SourceRef> webSearch(String query, int limit) {
+        LinkedHashMap<String,SourceRef> merged = new LinkedHashMap<>();
+
+        addAllUnique(merged, bingRss(query, limit));
+        if (merged.size() < Math.min(4, limit)) addAllUnique(merged, ddgLite(query, limit));
+        if (merged.size() < Math.min(4, limit)) addAllUnique(merged, ddgHtml(query, limit));
+
+        List<SourceRef> out = new ArrayList<>(merged.values());
+        if (out.size() > limit) return new ArrayList<>(out.subList(0, limit));
+        return out;
+    }
+
+    private static void addAllUnique(Map<String,SourceRef> map, List<SourceRef> items) {
+        for (SourceRef s : items) {
+            if (s.url == null || s.url.isBlank()) continue;
+            String key = canonicalUrlKey(s.url);
+            if (!key.isBlank() && !map.containsKey(key)) map.put(key, s);
+        }
+    }
+
+    private static String canonicalUrlKey(String url) {
+        try {
+            URL u = new URL(url);
+            String host = u.getHost().toLowerCase(Locale.ROOT).replaceFirst("^www\\.", "");
+            String path = u.getPath() == null ? "" : u.getPath().replaceAll("/+$", "");
+            return host + path;
+        } catch (Exception e) {
+            return url == null ? "" : url.trim();
+        }
+    }
+
+    private static List<SourceRef> bingRss(String query, int limit) {
+        List<SourceRef> out = new ArrayList<>();
+        try {
+            String url = "https://www.bing.com/search?format=rss&setlang=ru-RU&q=" + URLEncoder.encode(query, "UTF-8");
+            Document doc = Jsoup.connect(url)
+                    .userAgent(USER_AGENT)
+                    .header("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.5")
+                    .header("Accept", "application/rss+xml, application/xml, text/xml, */*")
+                    .parser(Parser.xmlParser())
+                    .timeout(12000)
+                    .get();
+            for (Element item : doc.select("item")) {
+                String title = item.selectFirst("title") == null ? "" : item.selectFirst("title").text();
+                String link = item.selectFirst("link") == null ? "" : item.selectFirst("link").text();
+                String desc = item.selectFirst("description") == null ? "" : item.selectFirst("description").text();
+                if (!link.startsWith("http")) continue;
+                out.add(new SourceRef(title, link, Jsoup.parse(desc).text()));
+                if (out.size() >= limit) break;
+            }
+        } catch (Exception ignored) {}
+        return out;
+    }
+
+    private static List<SourceRef> ddgLite(String query, int limit) {
+        List<SourceRef> out = new ArrayList<>();
+        try {
+            String url = "https://lite.duckduckgo.com/lite/?q=" + URLEncoder.encode(query, "UTF-8");
+            Document doc = Jsoup.connect(url)
+                    .userAgent(USER_AGENT)
+                    .header("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.5")
+                    .timeout(12000)
+                    .get();
+
+            Elements links = doc.select("a.result-link, a[href]");
+            for (Element a : links) {
+                String raw = a.attr("href");
+                String href = normalizeDdgUrl(raw);
+                String title = a.text().trim();
+                if (href.isBlank() || title.length() < 3) continue;
+                if (href.contains("duckduckgo.com") && !raw.contains("uddg=")) continue;
+
+                Element row = a.closest("tr");
+                String snippet = "";
+                if (row != null) {
+                    Element next = row.nextElementSibling();
+                    if (next != null) snippet = next.text();
+                }
+                out.add(new SourceRef(title, href, snippet));
+                if (out.size() >= limit) break;
+            }
+        } catch (Exception ignored) {}
+        return out;
+    }
+
+    private static List<SourceRef> ddgHtml(String query, int limit) {
         List<SourceRef> out = new ArrayList<>();
         try {
             String url = "https://html.duckduckgo.com/html/?q=" + URLEncoder.encode(query, "UTF-8");
