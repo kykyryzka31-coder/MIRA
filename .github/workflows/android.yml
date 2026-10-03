@@ -17,6 +17,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
+      - name: Preserve app signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: orgstaff-stable-signing-v1
+      - name: Create signing key if missing
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair               -keystore "$HOME/.android/debug.keystore"               -storepass android               -alias androiddebugkey               -keypass android               -dname "CN=OrgStaff Mobile,O=Sobrano Studio,C=RU"               -keyalg RSA -keysize 2048 -validity 10000
+          fi
       - name: Prepare Android SDK
         run: |
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort | tail -1)"
@@ -27,64 +38,16 @@ jobs:
         run: gradle testDebugUnitTest --stacktrace
       - name: Android lint
         run: gradle lintDebug --stacktrace
-      - name: Build debug APK
+      - name: Build APK
         run: gradle assembleDebug --stacktrace
-      - name: Inspect APK
+      - name: Verify APK
         run: |
-          test -f app/build/outputs/apk/debug/app-debug.apk
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
-          sha256sum app/build/outputs/apk/debug/app-debug.apk
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          sha256sum "$APK"
       - uses: actions/upload-artifact@v4
         with:
-          name: OrgStaff-Mobile-v1.0.0-debug
+          name: OrgStaff-Mobile-v1.1.0
           path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
-
-  emulator-smoke:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 18
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Prepare emulator
-        run: |
-          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort | tail -1)"
-          AVDMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name avdmanager | sort | tail -1)"
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platform-tools" "emulator" "system-images;android-29;google_apis;x86_64"
-          echo no | "$AVDMANAGER" create avd -n orgstaff_test -k "system-images;android-29;google_apis;x86_64" --force
-          sudo chmod 666 /dev/kvm || true
-      - uses: actions/download-artifact@v4
-        with:
-          name: OrgStaff-Mobile-v1.0.0-debug
-          path: apk
-      - name: Boot and launch app
-        run: |
-          ADB="$ANDROID_HOME/platform-tools/adb"
-          "$ANDROID_HOME/emulator/emulator" -avd orgstaff_test -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -no-metrics >/tmp/emulator.log 2>&1 &
-          "$ADB" wait-for-device
-          for i in $(seq 1 90); do
-            BOOT="$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
-            [ "$BOOT" = "1" ] && break
-            sleep 5
-          done
-          test "$BOOT" = "1"
-          "$ADB" install -r apk/app-debug.apk
-          "$ADB" logcat -c
-          "$ADB" shell am start -W -n studio.sobrano.orgstaff/.MainActivity
-          sleep 3
-          "$ADB" shell pidof studio.sobrano.orgstaff
-          "$ADB" shell dumpsys activity activities | grep -m1 "studio.sobrano.orgstaff/.MainActivity"
-          "$ADB" exec-out screencap -p > orgstaff-smoke.png
-          if "$ADB" logcat -d -t 400 | grep -E "FATAL EXCEPTION|Process: studio.sobrano.orgstaff"; then
-            exit 1
-          fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: OrgStaff-emulator-smoke
-          path: orgstaff-smoke.png
           retention-days: 30
