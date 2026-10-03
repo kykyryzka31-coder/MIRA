@@ -48,6 +48,12 @@ final class ServerApi {
                     String name = p.optString("name", "").trim();
                     if (role.isEmpty() || name.isEmpty()) continue;
                     PersonRecord person = new PersonRecord(role, name);
+                    if (p.has("confirmed")) {
+                        person.setServerStatus(
+                                p.optBoolean("confirmed", false),
+                                p.optString("confidence", "")
+                        );
+                    }
                     addSources(person.sources, p.optJSONArray("sources"));
                     out.people.add(person);
                 }
