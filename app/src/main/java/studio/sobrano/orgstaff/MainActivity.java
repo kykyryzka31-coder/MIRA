@@ -147,7 +147,7 @@ public class MainActivity extends Activity {
         LinearLayout tips = card(LIGHT_BLUE);
         tips.addView(tv("💡  Полезные советы", 17, TEXT, true));
         tips.addView(space(8));
-        tips.addView(tv("• Введите ИНН организации\n• Приложение ищет упоминания должностных лиц в открытых веб-источниках\n• Подтверждение ставится только при совпадении нескольких независимых доменов\n• Каждый найденный результат можно открыть вместе с источником", 14, MUTED, false));
+        tips.addView(tv("• Введите ИНН организации\n• Приложение ищет упоминания должностных лиц в открытых веб-источниках\n• Подтверждение ставится по официальному ЕГРЮЛ ФНС либо нескольким независимым источникам\n• Каждый найденный результат можно открыть вместе с источником", 14, MUTED, false));
         body.addView(tips);
         body.addView(space(18));
         body.addView(sectionTitle("Недавние поиски", "Все ›", v -> showHistory()));
@@ -241,7 +241,8 @@ public class MainActivity extends Activity {
         c.setPadding(dp(16),dp(14),dp(16),dp(14));
         TextView role = tv(p.role, 13, MUTED, false);
         TextView name = tv(p.name, 17, TEXT, true);
-        TextView st = tv((p.confirmed() ? "✓ Подтверждено" : "◷ Найдено в источнике") + "  •  " + p.sources.size() + " ист.", 12, p.confirmed()?GREEN:BLUE, true);
+        String statusLabel = p.officialRegistry() ? "✓ ЕГРЮЛ ФНС" : (p.confirmed() ? "✓ Подтверждено" : "◷ Требует проверки");
+        TextView st = tv(statusLabel + "  •  " + p.sources.size() + " ист.", 12, p.confirmed()?GREEN:BLUE, true);
         c.addView(role); c.addView(space(3)); c.addView(name); c.addView(space(5)); c.addView(st);
         c.setOnClickListener(v -> showPerson(p, r));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1,-2); lp.setMargins(0,0,0,dp(10)); c.setLayoutParams(lp);
@@ -261,7 +262,7 @@ public class MainActivity extends Activity {
         body.addView(hero);
         body.addView(space(12));
         LinearLayout info = card(Color.WHITE);
-        info.addView(infoRow("Статус", p.confirmed() ? "Подтверждено" : "Требует проверки")); info.addView(divider());
+        info.addView(infoRow("Статус", p.officialRegistry() ? "Официальный ЕГРЮЛ ФНС" : (p.confirmed() ? "Подтверждено" : "Требует проверки"))); info.addView(divider());
         info.addView(infoRow("Источников", String.valueOf(p.sources.size()))); info.addView(divider());
         info.addView(infoRow("ИНН организации", r.inn));
         body.addView(info);
@@ -272,7 +273,7 @@ public class MainActivity extends Activity {
         LinearLayout note = card(LIGHT_BLUE);
         note.addView(tv("Примечание", 16, TEXT, true));
         note.addView(space(5));
-        note.addView(tv("Карточка собрана из открытых источников. Статус «Подтверждено» означает совпадение ФИО и должности минимум на двух независимых доменах, но не заменяет официальную кадровую справку.", 13, MUTED, false));
+        note.addView(tv("Карточка собрана из открытых источников. Официальный ЕГРЮЛ ФНС считается подтверждением; остальные должности подтверждаются несколькими независимыми источниками. Для юридически значимой проверки сверяйте первоисточник.", 13, MUTED, false));
         body.addView(note);
         replace(scroll(body));
     }
