@@ -11,134 +11,144 @@ final class ServerApi {
     private static final String BASE = "https://tgstock.ru/api/orgstaff/";
 
     static SearchResult search(String inn, OsintSearcher.Progress progress) {
+        if (progress != null) progress.onProgress("Проверяю ЕГРЮЛ ФНС…");
+        return loadPeopleResult("summary", inn, "people", 30000);
+    }
+
+    static SearchResult loadManagement(String inn) {
+        return loadPeopleResult("management", inn, "people", 120000);
+    }
+
+    static SearchResult loadEmployees(String inn) {
+        return loadPeopleResult("employees", inn, "employees", 120000);
+    }
+
+    static SearchResult loadDetails(String inn) {
         SearchResult out = new SearchResult();
         out.inn = inn;
         try {
-            if (progress != null) progress.onProgress("Получаю сведения ЕГРЮЛ…");
-            JSONObject root = getJson("summary?inn=" + enc(inn), 30000);
+            JSONObject root = request("details", params("inn", inn), 90000);
             if (!root.optBoolean("ok", false)) {
-                out.orgName = "Организация по ИНН " + inn;
-                out.error = root.optString("error", "Сервер поиска вернул ошибку.");
+                out.error = root.optString("error", "Не удалось загрузить сведения.");
                 return out;
             }
-            if (progress != null) progress.onProgress("Формирую карточку организации…");
-            parseSearchResult(out, root, "people");
-            return out;
-        } catch (SocketTimeoutException e) {
-            out.orgName = "Организация по ИНН " + inn;
-            out.error = "Сервер поиска не успел ответить. Повторите запрос.";
-            return out;
+            parseOrganization(root.optJSONObject("organization"), out);
+            addSources(out.sources, root.optJSONArray("sources"));
         } catch (Exception e) {
-            out.orgName = "Организация по ИНН " + inn;
-            out.error = "Не удалось связаться с сервером поиска: " + safe(e);
-            return out;
+            out.error = humanError(e);
         }
-    }
-
-    static PeopleResult loadManagement(String inn) {
-        return loadPeople("management?inn=" + enc(inn), "people", 120000);
-    }
-
-    static PeopleResult loadEmployees(String inn) {
-        return loadPeople("employees?inn=" + enc(inn), "employees", 120000);
+        return out;
     }
 
     static PersonProfile loadPersonProfile(String inn, String name, String role) {
         PersonProfile out = new PersonProfile();
+        out.name = name == null ? "" : name;
+        out.role = role == null ? "" : role;
         try {
-            String path = "person?inn=" + enc(inn) + "&name=" + enc(name) + "&role=" + enc(role);
-            JSONObject root = getJson(path, 120000);
+            LinkedHashMap<String,String> q = new LinkedHashMap<>();
+            q.put("inn", inn);
+            q.put("name", out.name);
+            q.put("role", out.role);
+            JSONObject root = request("person", q, 120000);
             if (!root.optBoolean("ok", false)) {
                 out.error = root.optString("error", "Не удалось собрать профиль.");
                 return out;
             }
             JSONObject p = root.optJSONObject("person");
             if (p == null) {
-                out.error = "Профиль не найден.";
+                out.error = "Сервер не вернул карточку человека.";
                 return out;
             }
+            out.name = p.optString("name", out.name);
+            out.role = p.optString("role", out.role);
             out.birthDate = p.optString("birthDate", "");
             if (p.has("age") && !p.isNull("age")) out.age = String.valueOf(p.optInt("age"));
             out.birthplace = p.optString("birthplace", "");
             out.workSince = p.optString("workSince", "");
             out.tenure = p.optString("tenure", "");
-            out.privacy = p.optString("privacy", "");
             addStrings(out.education, p.optJSONArray("education"));
             addStrings(out.career, p.optJSONArray("career"));
             addSources(out.sources, p.optJSONArray("sources"));
-            return out;
         } catch (Exception e) {
-            out.error = e instanceof SocketTimeoutException
-                    ? "Глубокий поиск занял слишком много времени. Попробуйте ещё раз."
-                    : "Не удалось загрузить публичный профиль: " + safe(e);
-            return out;
-        }
-    }
-
-    private static PeopleResult loadPeople(String path, String key, int timeout) {
-        PeopleResult out = new PeopleResult();
-        try {
-            JSONObject root = getJson(path, timeout);
-            if (!root.optBoolean("ok", false)) {
-                out.error = root.optString("error", "Сервер поиска вернул ошибку.");
-                return out;
-            }
-            addPeople(out.people, root.optJSONArray(key));
-            addSources(out.sources, root.optJSONArray("sources"));
-        } catch (Exception e) {
-            out.error = e instanceof SocketTimeoutException
-                    ? "Поиск занял слишком много времени. Попробуйте ещё раз."
-                    : "Не удалось получить данные: " + safe(e);
+            out.error = humanError(e);
         }
         return out;
     }
 
-    private static void parseSearchResult(SearchResult out, JSONObject root, String peopleKey) {
-        JSONObject org = root.optJSONObject("organization");
-        out.orgName = org == null ? null : org.optString("name", null);
-        if (org != null) {
-            out.organization.legalName = org.optString("legalName", "");
-            out.organization.ogrn = org.optString("ogrn", "");
-            out.organization.kpp = org.optString("kpp", "");
-            out.organization.region = org.optString("region", "");
-            out.organization.legalAddress = org.optString("legalAddress", "");
-            out.organization.website = org.optString("website", "");
-            out.organization.registrationDate = org.optString("registrationDate", "");
-            out.organization.createdDate = org.optString("createdDate", "");
-            out.organization.age = org.optString("age", "");
-            out.organization.staffCount = org.optString("staffCount", "");
-            out.organization.foundersCount = org.optString("foundersCount", "");
-            out.organization.capital = org.optString("capital", "");
-            out.organization.okvedCode = org.optString("okvedCode", "");
-            out.organization.okvedText = org.optString("okvedText", "");
-        }
-        addPeople(out.people, root.optJSONArray(peopleKey));
-        addSources(out.sources, root.optJSONArray("sources"));
-        if (out.orgName == null || out.orgName.isBlank()) out.orgName = "Организация по ИНН " + out.inn;
-    }
-
-    private static void addPeople(List<PersonRecord> target, JSONArray people) {
-        if (people == null) return;
-        for (int i = 0; i < people.length(); i++) {
-            JSONObject p = people.optJSONObject(i);
-            if (p == null) continue;
-            String role = p.optString("role", "").trim();
-            String name = p.optString("name", "").trim();
-            if (role.isEmpty() || name.isEmpty()) continue;
-            PersonRecord person = new PersonRecord(role, name);
-            if (p.has("confirmed")) {
-                person.setServerStatus(p.optBoolean("confirmed", false), p.optString("confidence", ""));
-            }
-            addSources(person.sources, p.optJSONArray("sources"));
-            target.add(person);
-        }
-    }
-
-    private static JSONObject getJson(String path, int readTimeout) throws Exception {
-        HttpURLConnection conn = null;
+    private static SearchResult loadPeopleResult(String endpoint, String inn, String peopleKey, int timeout) {
+        SearchResult out = new SearchResult();
+        out.inn = inn;
         try {
-            URL url = new URL(BASE + path);
-            conn = (HttpURLConnection) url.openConnection();
+            JSONObject root = request(endpoint, params("inn", inn), timeout);
+            if (!root.optBoolean("ok", false)) {
+                out.error = root.optString("error", "Сервер поиска вернул ошибку.");
+                out.orgName = "Организация по ИНН " + inn;
+                return out;
+            }
+
+            parseOrganization(root.optJSONObject("organization"), out);
+            JSONArray people = root.optJSONArray(peopleKey);
+            if (people != null) {
+                for (int i = 0; i < people.length(); i++) {
+                    JSONObject p = people.optJSONObject(i);
+                    if (p == null) continue;
+                    String role = p.optString("role", "").trim();
+                    String name = p.optString("name", "").trim();
+                    if (role.isEmpty() || name.isEmpty()) continue;
+                    PersonRecord person = new PersonRecord(role, name);
+                    if (p.has("confirmed")) {
+                        person.setServerStatus(p.optBoolean("confirmed", false), p.optString("confidence", ""));
+                    }
+                    addSources(person.sources, p.optJSONArray("sources"));
+                    out.people.add(person);
+                }
+            }
+            addSources(out.sources, root.optJSONArray("sources"));
+            if (out.orgName == null || out.orgName.isBlank()) out.orgName = "Организация по ИНН " + inn;
+        } catch (Exception e) {
+            out.orgName = "Организация по ИНН " + inn;
+            out.error = humanError(e);
+        }
+        return out;
+    }
+
+    private static void parseOrganization(JSONObject org, SearchResult out) {
+        if (org == null) return;
+        OrganizationInfo o = out.organization;
+        o.name = org.optString("name", "");
+        o.legalName = org.optString("legalName", "");
+        o.ogrn = org.optString("ogrn", "");
+        o.kpp = org.optString("kpp", "");
+        o.region = org.optString("region", "");
+        o.legalAddress = org.optString("legalAddress", "");
+        o.website = org.optString("website", "");
+        o.registrationDate = org.optString("registrationDate", "");
+        o.createdDate = org.optString("createdDate", "");
+        o.age = org.optString("age", "");
+        o.staffCount = org.optString("staffCount", "");
+        o.foundersCount = org.optString("foundersCount", "");
+        o.capital = org.optString("capital", "");
+        o.okvedCode = org.optString("okvedCode", "");
+        o.okvedText = org.optString("okvedText", "");
+        out.orgName = o.name;
+    }
+
+    private static JSONObject request(String endpoint, Map<String,String> query, int readTimeout) throws Exception {
+        StringBuilder url = new StringBuilder(BASE).append(endpoint);
+        if (query != null && !query.isEmpty()) {
+            url.append('?');
+            boolean first = true;
+            for (Map.Entry<String,String> e : query.entrySet()) {
+                if (!first) url.append('&');
+                first = false;
+                url.append(URLEncoder.encode(e.getKey(), "UTF-8"))
+                        .append('=')
+                        .append(URLEncoder.encode(e.getValue() == null ? "" : e.getValue(), "UTF-8"));
+            }
+        }
+
+        HttpURLConnection conn = (HttpURLConnection) new URL(url.toString()).openConnection();
+        try {
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(12000);
             conn.setReadTimeout(readTimeout);
@@ -147,22 +157,28 @@ final class ServerApi {
             int status = conn.getResponseCode();
             InputStream stream = status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream();
             String body = readAll(stream);
-            JSONObject root = body.isBlank() ? new JSONObject() : new JSONObject(body);
+            if (body.isBlank()) throw new IOException("Пустой ответ сервера");
+            JSONObject root = new JSONObject(body);
             if (status < 200 || status >= 300) {
-                if (!root.has("error")) root.put("error", "HTTP " + status);
-                root.put("ok", false);
+                throw new IOException(root.optString("error", "HTTP " + status));
             }
             return root;
         } finally {
-            if (conn != null) conn.disconnect();
+            conn.disconnect();
         }
+    }
+
+    private static Map<String,String> params(String key, String value) {
+        LinkedHashMap<String,String> out = new LinkedHashMap<>();
+        out.put(key, value);
+        return out;
     }
 
     private static void addStrings(List<String> target, JSONArray a) {
         if (a == null) return;
         for (int i = 0; i < a.length(); i++) {
-            String s = a.optString(i, "").trim();
-            if (!s.isEmpty() && !target.contains(s)) target.add(s);
+            String value = a.optString(i, "").trim();
+            if (!value.isEmpty() && !target.contains(value)) target.add(value);
         }
     }
 
@@ -183,11 +199,6 @@ final class ServerApi {
         }
     }
 
-    private static String enc(String s) {
-        try { return URLEncoder.encode(s == null ? "" : s, "UTF-8"); }
-        catch (Exception e) { return ""; }
-    }
-
     private static String readAll(InputStream stream) throws IOException {
         if (stream == null) return "";
         try (InputStream in = stream; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -198,8 +209,9 @@ final class ServerApi {
         }
     }
 
-    private static String safe(Exception e) {
-        String s = e.getMessage();
-        return s == null || s.isBlank() ? "неизвестная ошибка" : s;
+    private static String humanError(Exception e) {
+        if (e instanceof SocketTimeoutException) return "Сервер поиска не успел ответить. Повторите запрос.";
+        String msg = e.getMessage();
+        return "Не удалось получить данные: " + (msg == null || msg.isBlank() ? "неизвестная ошибка" : msg);
     }
 }
