@@ -59,7 +59,7 @@ public class MainActivity extends Activity {
         nav.setOrientation(LinearLayout.HORIZONTAL);
         nav.setPadding(dp(8), dp(6), dp(8), dp(8));
         nav.setBackgroundColor(Color.WHITE);
-        root.addView(nav, new LinearLayout.LayoutParams(-1, dp(72)));
+        root.addView(nav, new LinearLayout.LayoutParams(-1, dp(64)));
         setContentView(root);
         rebuildNav();
     }
@@ -79,8 +79,8 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setGravity(Gravity.CENTER);
         boolean active = tab.equals(activeTab);
-        TextView i = tv(icon, 23, active ? BLUE : MUTED, true);
-        TextView t = tv(label, 12, active ? BLUE : MUTED, active);
+        TextView i = tv(icon, 20, active ? BLUE : MUTED, true);
+        TextView t = tv(label, 11, active ? BLUE : MUTED, active);
         box.addView(i);
         box.addView(t);
         box.setOnClickListener(v -> {
@@ -105,7 +105,7 @@ public class MainActivity extends Activity {
     private LinearLayout page() {
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL);
-        l.setPadding(dp(20), dp(18), dp(20), dp(26));
+        l.setPadding(dp(16), dp(12), dp(16), dp(20));
         return l;
     }
 
@@ -113,27 +113,27 @@ public class MainActivity extends Activity {
         setTab("search");
         LinearLayout body = page();
         body.addView(header("▥", "OrgStaff Mobile", "Поиск руководства по ИНН"));
-        body.addView(space(20));
-        TextView desc = tv("Актуальная информация о руководстве организаций из открытых источников", 16, MUTED, false);
+        body.addView(space(14));
+        TextView desc = tv("Актуальная информация о руководстве организаций из открытых источников", 15, MUTED, false);
         desc.setLineSpacing(0,1.18f);
         body.addView(desc);
-        body.addView(space(18));
+        body.addView(space(14));
 
         LinearLayout card = card(Color.WHITE);
-        TextView label = tv("Введите ИНН", 18, TEXT, true);
+        TextView label = tv("Введите ИНН", 17, TEXT, true);
         card.addView(label);
-        card.addView(space(10));
+        card.addView(space(8));
         EditText input = new EditText(this);
         input.setHint("10 или 12 цифр");
         input.setTextColor(TEXT); input.setHintTextColor(Color.rgb(148,163,184));
-        input.setTextSize(18); input.setSingleLine(true);
+        input.setTextSize(16); input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_NUMBER);
-        input.setPadding(dp(16),0,dp(16),0);
+        input.setPadding(dp(14),0,dp(14),0);
         input.setBackground(rounded(Color.rgb(252,253,255), BORDER, 14, 1));
-        card.addView(input, new LinearLayout.LayoutParams(-1, dp(58)));
-        card.addView(space(12));
+        card.addView(input, new LinearLayout.LayoutParams(-1, dp(52)));
+        card.addView(space(10));
         Button search = primaryButton("⌕   Найти");
-        card.addView(search, new LinearLayout.LayoutParams(-1, dp(58)));
+        card.addView(search, new LinearLayout.LayoutParams(-1, dp(54)));
         search.setOnClickListener(v -> {
             String inn = input.getText().toString().trim();
             if (!InnValidator.isValid(inn)) {
@@ -143,12 +143,12 @@ public class MainActivity extends Activity {
             beginSearch(inn);
         });
         body.addView(card);
-        body.addView(space(16));
+        body.addView(space(13));
 
         LinearLayout tips = card(LIGHT_BLUE);
-        tips.addView(tv("💡  Полезные советы", 17, TEXT, true));
+        tips.addView(tv("💡  Полезные советы", 16, TEXT, true));
         tips.addView(space(8));
-        tips.addView(tv("• Введите ИНН организации\n• Приложение ищет упоминания должностных лиц в открытых веб-источниках\n• Подтверждение ставится по официальному ЕГРЮЛ ФНС либо нескольким независимым источникам\n• Каждый найденный результат можно открыть вместе с источником", 14, MUTED, false));
+        tips.addView(tv("• Введите ИНН организации\n• Приложение ищет упоминания должностных лиц в открытых веб-источниках\n• Подтверждение ставится по официальному ЕГРЮЛ ФНС либо нескольким независимым источникам\n• Каждый найденный результат можно открыть вместе с источником", 13, MUTED, false));
         body.addView(tips);
         body.addView(space(18));
         body.addView(sectionTitle("Недавние поиски", "Все ›", v -> showHistory()));
@@ -681,26 +681,26 @@ public class MainActivity extends Activity {
 
     private View header(String icon, String title, String sub) {
         LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL);
-        TextView logo = tv(icon, 30, BLUE, true); logo.setGravity(Gravity.CENTER); logo.setBackground(rounded(LIGHT_BLUE, Color.TRANSPARENT, 16,0));
-        row.addView(logo, new LinearLayout.LayoutParams(dp(62),dp(62)));
-        LinearLayout tx = new LinearLayout(this); tx.setOrientation(LinearLayout.VERTICAL); tx.setPadding(dp(12),0,0,0);
-        tx.addView(tv(title, 25, TEXT, true)); tx.addView(tv(sub, 14, MUTED, false));
+        TextView logo = tv(icon, 25, BLUE, true); logo.setGravity(Gravity.CENTER); logo.setBackground(rounded(LIGHT_BLUE, Color.TRANSPARENT, 14,0));
+        row.addView(logo, new LinearLayout.LayoutParams(dp(52),dp(52)));
+        LinearLayout tx = new LinearLayout(this); tx.setOrientation(LinearLayout.VERTICAL); tx.setPadding(dp(10),0,0,0);
+        tx.addView(tv(title, 22, TEXT, true)); tx.addView(tv(sub, 13, MUTED, false));
         row.addView(tx, new LinearLayout.LayoutParams(0,-2,1f)); return row;
     }
 
     private View backHeader(String title, String sub, Runnable back) {
         LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL);
-        TextView b = tv("‹", 44, MUTED, false); b.setGravity(Gravity.CENTER); b.setOnClickListener(v -> back.run());
-        row.addView(b, new LinearLayout.LayoutParams(dp(42),dp(58)));
+        TextView b = tv("‹", 38, MUTED, false); b.setGravity(Gravity.CENTER); b.setOnClickListener(v -> back.run());
+        row.addView(b, new LinearLayout.LayoutParams(dp(36),dp(50)));
         LinearLayout tx = new LinearLayout(this); tx.setOrientation(LinearLayout.VERTICAL); tx.setPadding(dp(8),0,0,0);
-        TextView t = tv(title, 24, TEXT, true); t.setMaxLines(2); tx.addView(t); if (sub != null) tx.addView(tv(sub, 14, MUTED, false));
+        TextView t = tv(title, 21, TEXT, true); t.setMaxLines(2); tx.addView(t); if (sub != null) tx.addView(tv(sub, 13, MUTED, false));
         row.addView(tx,new LinearLayout.LayoutParams(0,-2,1f)); return row;
     }
 
     private View sectionTitle(String left, String right, View.OnClickListener click) {
         LinearLayout r = new LinearLayout(this); r.setOrientation(LinearLayout.HORIZONTAL); r.setGravity(Gravity.CENTER_VERTICAL); r.setPadding(dp(2),dp(4),dp(2),dp(10));
-        r.addView(tv(left, 21, TEXT, true), new LinearLayout.LayoutParams(0,-2,1f));
-        TextView x = tv(right == null ? "" : right, 13, BLUE, true); if (click != null) x.setOnClickListener(click); r.addView(x); return r;
+        r.addView(tv(left, 19, TEXT, true), new LinearLayout.LayoutParams(0,-2,1f));
+        TextView x = tv(right == null ? "" : right, 12, BLUE, true); if (click != null) x.setOnClickListener(click); r.addView(x); return r;
     }
 
     private View infoRow(String k, String v) {
@@ -710,15 +710,15 @@ public class MainActivity extends Activity {
     }
 
     private TextView chip(String s, int bg, int fg) {
-        TextView t = tv(s, 12, fg, true); t.setGravity(Gravity.CENTER); t.setPadding(dp(12),dp(8),dp(12),dp(8)); t.setBackground(rounded(bg,Color.TRANSPARENT,20,0)); return t;
+        TextView t = tv(s, 11, fg, true); t.setGravity(Gravity.CENTER); t.setPadding(dp(10),dp(6),dp(10),dp(6)); t.setBackground(rounded(bg,Color.TRANSPARENT,20,0)); return t;
     }
 
     private LinearLayout card(int color) {
-        LinearLayout l = new LinearLayout(this); l.setOrientation(LinearLayout.VERTICAL); l.setPadding(dp(18),dp(17),dp(18),dp(17)); l.setBackground(rounded(color, BORDER, 20, 1)); return l;
+        LinearLayout l = new LinearLayout(this); l.setOrientation(LinearLayout.VERTICAL); l.setPadding(dp(15),dp(14),dp(15),dp(14)); l.setBackground(rounded(color, BORDER, 18, 1)); return l;
     }
 
     private View emptyCard(String title, String text) {
-        LinearLayout c = card(Color.WHITE); c.addView(tv(title,17,TEXT,true)); c.addView(space(5)); c.addView(tv(text,13,MUTED,false)); return c;
+        LinearLayout c = card(Color.WHITE); c.addView(tv(title,16,TEXT,true)); c.addView(space(4)); c.addView(tv(text,12,MUTED,false)); return c;
     }
 
     private GradientDrawable rounded(int fill, int stroke, int radius, int sw) {
@@ -726,14 +726,14 @@ public class MainActivity extends Activity {
     }
 
     private TextView tv(String s, float sp, int color, boolean bold) {
-        TextView t = new TextView(this); t.setText(s); t.setTextSize(sp); t.setTextColor(color); if (bold) t.setTypeface(Typeface.DEFAULT,Typeface.BOLD); t.setLineSpacing(0,1.14f); return t;
+        TextView t = new TextView(this); t.setText(s); t.setTextSize(sp); t.setTextColor(color); if (bold) t.setTypeface(Typeface.DEFAULT,Typeface.BOLD); t.setLineSpacing(0,1.10f); return t;
     }
 
     private Button primaryButton(String s) {
-        Button b = new Button(this); b.setText(s); b.setTextColor(Color.WHITE); b.setTextSize(18); b.setAllCaps(false); b.setTypeface(Typeface.DEFAULT,Typeface.BOLD); b.setBackground(rounded(BLUE,Color.TRANSPARENT,16,0)); return b;
+        Button b = new Button(this); b.setText(s); b.setTextColor(Color.WHITE); b.setTextSize(16); b.setAllCaps(false); b.setTypeface(Typeface.DEFAULT,Typeface.BOLD); b.setBackground(rounded(BLUE,Color.TRANSPARENT,16,0)); return b;
     }
     private Button secondaryButton(String s) {
-        Button b = new Button(this); b.setText(s); b.setTextColor(BLUE); b.setTextSize(14); b.setAllCaps(false); b.setBackground(rounded(Color.WHITE, Color.rgb(190,215,246),14,1)); return b;
+        Button b = new Button(this); b.setText(s); b.setTextColor(BLUE); b.setTextSize(13); b.setAllCaps(false); b.setBackground(rounded(Color.WHITE, Color.rgb(190,215,246),14,1)); return b;
     }
 
     private View divider() { View v = new View(this); v.setBackgroundColor(BORDER); v.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(1))); return v; }
