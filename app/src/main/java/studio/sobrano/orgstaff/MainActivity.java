@@ -245,6 +245,13 @@ public class MainActivity extends Activity {
                 });
             });
         });
+        final boolean[] leadershipAutoLoaded = {false};
+        leadershipContent.addOnLayoutChangeListener((v, l, t, rr, b, ol, ot, orr, ob) -> {
+            if (v.getVisibility() == View.VISIBLE && !leadershipAutoLoaded[0]) {
+                leadershipAutoLoaded[0] = true;
+                moreLeadership.performClick();
+            }
+        });
         body.addView(expandableSection("Руководство", r.people.size() + " найдено", false, leadershipContent));
         body.addView(space(12));
 
@@ -288,6 +295,13 @@ public class MainActivity extends Activity {
                     }
                 });
             });
+        });
+        final boolean[] employeesAutoLoaded = {false};
+        employeesContent.addOnLayoutChangeListener((v, l, t, rr, b, ol, ot, orr, ob) -> {
+            if (v.getVisibility() == View.VISIBLE && !employeesAutoLoaded[0]) {
+                employeesAutoLoaded[0] = true;
+                loadEmployees.performClick();
+            }
         });
         body.addView(expandableSection("Публично найденные сотрудники", "нажмите, чтобы открыть", false, employeesContent));
         body.addView(space(12));
