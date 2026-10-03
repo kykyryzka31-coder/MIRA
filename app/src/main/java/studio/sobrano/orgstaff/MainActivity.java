@@ -519,11 +519,11 @@ public class MainActivity extends Activity {
         LinearLayout work = new LinearLayout(this);
         work.setOrientation(LinearLayout.VERTICAL);
         work.addView(infoRow("Должность", p.role));
-        if (!profile.workSince.isBlank()) { work.addView(divider()); work.addView(infoRow("В должности с", profile.workSince)); }
+        if (!profile.workSince.isBlank()) { work.addView(divider()); work.addView(infoRow("Публично подтверждено с", profile.workSince)); }
         if (!profile.tenure.isBlank()) { work.addView(divider()); work.addView(infoRow("Период", profile.tenure)); }
         if (profile.workSince.isBlank()) {
             work.addView(divider());
-            work.addView(tv("Точная дата начала работы в открытых источниках пока не подтверждена.", 12, MUTED, false));
+            work.addView(tv("Точный публично подтверждённый период пока не определён.", 12, MUTED, false));
         }
         body.addView(expandableSection("Работа в организации", profile.tenure.isBlank() ? "период уточняется" : profile.tenure, true, work));
         body.addView(space(10));
