@@ -23,7 +23,6 @@ final class PersonRecord {
     final String role;
     final String name;
     final List<SourceRef> sources = new ArrayList<>();
-
     private Boolean serverConfirmed;
     String confidence = "";
 
@@ -49,10 +48,47 @@ final class PersonRecord {
     }
 }
 
+final class OrganizationInfo {
+    String legalName = "";
+    String ogrn = "";
+    String kpp = "";
+    String region = "";
+    String legalAddress = "";
+    String website = "";
+    String registrationDate = "";
+    String createdDate = "";
+    String age = "";
+    String staffCount = "";
+    String foundersCount = "";
+    String capital = "";
+    String okvedCode = "";
+    String okvedText = "";
+}
+
 final class SearchResult {
     String inn;
     String orgName;
     String error;
+    OrganizationInfo organization = new OrganizationInfo();
     final List<PersonRecord> people = new ArrayList<>();
+    final List<SourceRef> sources = new ArrayList<>();
+}
+
+final class PeopleResult {
+    String error;
+    final List<PersonRecord> people = new ArrayList<>();
+    final List<SourceRef> sources = new ArrayList<>();
+}
+
+final class PersonProfile {
+    String error;
+    String birthDate = "";
+    String age = "";
+    String birthplace = "";
+    String workSince = "";
+    String tenure = "";
+    String privacy = "";
+    final List<String> education = new ArrayList<>();
+    final List<String> career = new ArrayList<>();
     final List<SourceRef> sources = new ArrayList<>();
 }
