@@ -353,8 +353,21 @@ public class MainActivity extends Activity {
                             Toast.makeText(this, loaded.error, Toast.LENGTH_LONG).show();
                             return;
                         }
+                        boolean gotExtra =
+                                !loaded.organization.legalAddress.isBlank() ||
+                                !loaded.organization.website.isBlank() ||
+                                !loaded.organization.staffCount.isBlank() ||
+                                !loaded.organization.capital.isBlank() ||
+                                !loaded.organization.okvedCode.isBlank() ||
+                                !loaded.organization.createdDate.isBlank();
                         r.organization.mergeFrom(loaded.organization);
                         mergeSourcesInto(r.sources, loaded.sources);
+                        if (!gotExtra) {
+                            details.setText("Дополнительных сведений не найдено");
+                            details.setEnabled(false);
+                            hint.setText("Основные реквизиты выше подтверждены. Дополнительные открытые сведения сейчас недоступны.");
+                            return;
+                        }
                         box.removeAllViews();
                         addOrganizationInfo(box, r);
                     });
