@@ -102,6 +102,7 @@ final class PersonProfile {
     String workSince = "";
     String tenure = "";
     String error;
+    String privacy = "";
     final List<String> education = new ArrayList<>();
     final List<String> career = new ArrayList<>();
     final List<SourceRef> sources = new ArrayList<>();
